@@ -26,7 +26,6 @@ static void launch(const char *command)
 {
     std::cout << " -> Launching " << command << std::endl;
 
-    return;
     const int pid = fork();
 
     switch(pid) {
@@ -34,7 +33,9 @@ static void launch(const char *command)
         if (s_verbose) {
             std::cout << "Child executing " << command << std::endl;
         }
+
         std::system(command);
+        exit(0);
         break;
     case -1:
         std::cerr << "Error forking: " << strerror(errno) << std::endl;
@@ -43,6 +44,7 @@ static void launch(const char *command)
         if (s_verbose) {
             std::cout << "Forked, parent PID: " << pid << std::endl;
         }
+
         break;
     }
 }
@@ -138,11 +140,6 @@ static std::string localConfigPath()
     }
 
     return resolvePath(ret.c_str());
-}
-
-void print_usage(const char *executable)
-{
-    std::cout << "Usage: " << executable << "--system|--user|--both [--verbose]" << std::endl;
 }
 
 inline std::string trim(std::string string)
@@ -300,9 +297,14 @@ struct Parser {
     }
 };
 
+void print_usage(const char *executable)
+{
+    std::cout << "Usage:\n\t" << executable << " (--system|--user|--both) [--verbose]" << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
-    if (argv[1][0] != '-' || strlen(argv[1]) < 3) {
+    if (argc < 2 || argv[1][0] != '-' || strlen(argv[1]) < 3) {
         print_usage(argv[0]);
         return 1;
     }
