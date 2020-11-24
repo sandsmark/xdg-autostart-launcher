@@ -10,46 +10,59 @@
 #include <sys/types.h>
 
 static bool s_verbose = false;
+static const std::filesystem::perms execPermissions = std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec | std::filesystem::perms::others_exec;
+
+inline std::string trim(std::string string)
+{
+    if (string.empty()) {
+        return string;
+    }
+
+    string.erase(string.begin(), std::find_if(string.begin(), string.end(), [](int c) { return !std::isspace(c); }  ));
+    string.erase(std::find_if(string.rbegin(), string.rend(), [](int c) { return !std::isspace(c); }).base(), string.end());
+    return string;
+}
+
+inline std::vector<std::string> stringSplit(const std::string &string, const char delimiter = ' ')
+{
+    if (string.find(delimiter) == std::string::npos) {
+        return {string};
+    }
+
+    std::vector<std::string> ret;
+    std::istringstream stream(string);
+    std::string part;
+    while (std::getline(stream, part, delimiter)) {
+        part = trim(part);
+        if (!part.empty()) {
+            ret.push_back(part);
+        }
+    }
+    if (ret.empty()) {
+        return {string};
+    }
+    return ret;
+}
 
 static void launch(const char *command)
 {
     std::cout << " -> Launching " << command << std::endl;
 
     const int pid = fork();
-
     switch(pid) {
     case 0:
-        if (s_verbose) {
-            std::cout << "Child executing " << command << std::endl;
-        }
+        if (s_verbose) std::cout << "Child executing " << command << std::endl;
 
         std::system(command);
         exit(0);
         break;
     case -1:
-        std::cerr << "Error forking: " << strerror(errno) << std::endl;
+        std::cerr << " ! Error forking: " << strerror(errno) << std::endl;
         return;
     default:
-        if (s_verbose) {
-            std::cout << "Forked, parent PID: " << pid << std::endl;
-        }
-
+        if (s_verbose) std::cout << "Forked, parent PID: " << pid << std::endl;
         break;
     }
-}
-
-static std::string resolvePath(const char *path)
-{
-    if (!path) {
-        return {};
-    }
-
-    wordexp_t expanded;
-    wordexp(path, &expanded, 0);
-    std::string resolved(expanded.we_wordv[0]);
-    wordfree(&expanded);
-
-    return resolved;
 }
 
 static std::vector<std::string> globalConfigPaths()
@@ -62,7 +75,7 @@ static std::vector<std::string> globalConfigPaths()
     }
 
     std::vector<std::string> ret;
-    std::string paths(rawPath);;
+    std::string paths(rawPath);
     if (paths.find(':') != std::string::npos) {
         std::istringstream stream(paths);
         std::string testPath;
@@ -90,6 +103,20 @@ static std::vector<std::string> globalConfigPaths()
     return ret;
 }
 
+static std::string resolvePath(const char *path)
+{
+    if (!path) {
+        return {};
+    }
+
+    wordexp_t expanded;
+    wordexp(path, &expanded, 0);
+    std::string resolved(expanded.we_wordv[0]);
+    wordfree(&expanded);
+
+    return resolved;
+}
+
 static std::string localConfigPath()
 {
     std::string ret;
@@ -99,7 +126,13 @@ static std::string localConfigPath()
         ret = std::string(rawPath);
     }
     if (!ret.empty()) {
-        return resolvePath(ret.c_str());
+        ret = resolvePath(ret.c_str());
+
+        if (std::filesystem::exists(ret)) {
+            return ret;
+        } else {
+            ret = "";
+        }
     }
 
     if (ret.empty()) {
@@ -124,40 +157,11 @@ static std::string localConfigPath()
         }
     }
 
-    if (ret.empty()) {
+    if (ret.empty() || !std::filesystem::exists(ret)) {
         ret = "~/.config";
     }
 
     return resolvePath(ret.c_str());
-}
-
-inline std::string trim(std::string string)
-{
-    string.erase(string.begin(), std::find_if(string.begin(), string.end(), [](int c) { return !std::isspace(c); }  ));
-    string.erase(std::find_if(string.rbegin(), string.rend(), [](int c) { return !std::isspace(c); }).base(), string.end());
-    return string;
-}
-
-inline std::vector<std::string> stringSplit(const std::string &string, const char delimiter = ' ')
-{
-    if (string.find(delimiter) == std::string::npos) {
-        return {string};
-    }
-
-    std::vector<std::string> ret;
-    std::istringstream stream(string);
-    std::string part;
-    while (std::getline(stream, part, delimiter)) {
-        if (part.empty()) {
-            continue;
-        }
-
-        ret.push_back(part);
-    }
-    if (ret.empty()) {
-        return {string};
-    }
-    return ret;
 }
 
 struct Parser {
@@ -167,8 +171,8 @@ struct Parser {
     void parseFile(const std::filesystem::path &path)
     {
         std::ifstream file(path);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open " << path << std::endl;
+        if (!file.good()) {
+            std::cerr << " ! Failed to open " << path << std::endl;
             return;
         }
 
@@ -185,17 +189,17 @@ struct Parser {
             line = trim(line);
 
             if (line[0] == '#') {
-                if (s_verbose) std::cout << "Skipping comment " << line << " in " << path << std::endl;
+                if (s_verbose) std::cout << "Skipping comment '" << line << "' in " << path << std::endl;
                 continue;
             }
             if (line[0] == '[') {
-                if (s_verbose) std::cout << "Skipping group " << line << " in " << path << std::endl;
+                if (s_verbose) std::cout << "Skipping group '" << line << "' in " << path << std::endl;
                 continue;
             }
             size_t nameEnd = line.find('=');
 
             if (nameEnd == std::string::npos) {
-                if (s_verbose) std::cout << "Invalid line " << line << " in " << path << std::endl;
+                std::cerr << " ! Invalid line '" << line << "' in " << path << std::endl;
                 continue;
             }
 
@@ -203,7 +207,7 @@ struct Parser {
             const std::string value = trim(line.substr(nameEnd + 1));
 
             if (name == "" || value == "") {
-                if (s_verbose) std::cout << "Invalid line " << line << " in " << path << std::endl;
+                std::cerr << " ! Invalid line '" << line << "' in " << path << std::endl;
                 continue;
             }
 
@@ -219,24 +223,24 @@ struct Parser {
 
             // TODO, parse conditions and stuff
             if (name == "OnlyShowIn") {
-                if (s_verbose) std::cout << "Ignoring " << path << " because of " << line << std::endl;
+                if (s_verbose) std::cout << "Ignoring " << path << " because of only show in: " << line << std::endl;
                 hidden = true;
                 continue;
             }
             if (name == "X-KDE-autostart-condition") {
-                if (s_verbose) std::cout << "Ignoring " << path << " because of " << line << std::endl;
+                if (s_verbose) std::cout << "Ignoring " << path << " because of KDE condition: " << line << std::endl;
                 hidden = true;
                 continue;
             }
             if (name == "TryExec") {
-                if (s_verbose) std::cout << "Ignoring " << path << " because of " << line << std::endl;
+                if (s_verbose) std::cout << "Ignoring " << path << " because of TryExec: " << line << std::endl;
                 hidden = true;
                 continue;
             }
         }
 
         if (exec.empty()) {
-            std::cerr << "Unable to find execution in " << path << std::endl;
+            std::cerr << " ! Unable to find Exec in " << path << std::endl;
             return;
         }
         if (hidden) {
@@ -250,7 +254,7 @@ struct Parser {
 
     void handleDir(const std::filesystem::path &dir)
     {
-        for (const filesystem::path &file : std::filesystem::directory_iterator(dir)) {
+        for (const std::filesystem::path &file : std::filesystem::directory_iterator(dir)) {
             parseFile(file);
         }
     }
@@ -259,24 +263,21 @@ struct Parser {
         for (const std::string &exec : toLaunch) {
             const std::string executable = stringSplit(exec)[0];
             if (disabled.count(executable)) {
-                std::cout << "Skipping disabled " << exec << std::endl;
+                std::cout << " - Skipping disabled " << exec << std::endl;
                 continue;
             }
             if (std::filesystem::path(executable).has_parent_path() && !std::filesystem::exists(executable)) {
-                std::cerr << executable << " does not exist, ignoring" << std::endl;
+                std::cerr << " ! " << executable << " does not exist, ignoring" << std::endl;
                 continue;
             }
             if (std::filesystem::exists(executable)) {
                 if (!std::filesystem::is_regular_file(executable) &&
                     !std::filesystem::is_symlink(executable)) {
-                    std::cerr << executable << " not a file" << std::endl;
+                    std::cerr << " ! " << executable << " not a file" << std::endl;
                 }
                 std::filesystem::perms permissions = std::filesystem::status(executable).permissions();
-                if ((permissions & std::filesystem::perms::owner_exec) == std::filesystem::perms::none &&
-                    (permissions & std::filesystem::perms::group_exec) == std::filesystem::perms::none &&
-                    (permissions & std::filesystem::perms::others_exec) == std::filesystem::perms::none)
-                {
-                    std::cerr << executable << " is not executable" << std::endl;
+                if ((permissions & execPermissions) == std::filesystem::perms::none) {
+                    std::cerr << " ! " << executable << " is not executable" << std::endl;
                 }
 
             }
@@ -312,10 +313,15 @@ int main(int argc, char *argv[])
             break;
 
         default:
-            std::cout << "Invalid option " << argv[1] << std::endl;
+            std::cerr << " ! Invalid option " << argv[1] << std::endl;
             print_usage(argv[0]);
             return 1;
     }
+    if (!user && !global) {
+        print_usage(argv[0]);
+    }
+
+    // lol don't care
     if (argc > 2) {
         s_verbose = true;
     }
@@ -332,19 +338,17 @@ int main(int argc, char *argv[])
             }
         }
         if (globalFailed) {
-            std::cerr << "Failed to find system directories" << std::endl;
+            std::cerr << " ! Failed to find system directories" << std::endl;
 
             if (s_verbose) {
                 std::cout << ", tried:" << std::endl;
                 for (const std::string &directory : globalConfigPaths()) {
-                    std::cerr << directory << std::endl;
+                    std::cout << directory << std::endl;
                 }
             } else {
                 std::cerr << std::endl;
             }
-        } else if (s_verbose) {
-            std::cout << "Handled system dirs" << std::endl;
-        }
+        } else if (s_verbose) { std::cout << "Handled system dirs" << std::endl; }
     }
 
     if (user) {
@@ -353,7 +357,7 @@ int main(int argc, char *argv[])
         if (std::filesystem::exists(path)) {
             parser.handleDir(path);
         } else {
-            std::cerr << "User directory " << path << " does not exist" << std::endl;
+            std::cerr << " ! User directory " << path << " does not exist" << std::endl;
             userFailed = true;
         }
     }
