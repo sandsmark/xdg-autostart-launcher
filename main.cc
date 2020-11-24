@@ -1,24 +1,13 @@
 #include <pugixml.hpp>
-
-#include <iostream>
-#include <vector>
-#include <unordered_set>
+#include <filesystem>
 #include <fstream>
-
-
+#include <iostream>
+#include <unordered_set>
+#include <vector>
 #include <wordexp.h>
-
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-
-#include <filesystem>
-// it has obnoxiously long names thanks to the boost influence
-namespace filesystem = std::filesystem;
-using std::filesystem::exists;
-using std::filesystem::last_write_time;
-using std::filesystem::directory_iterator;
-using std::filesystem::directory_entry;
 
 static bool s_verbose = false;
 
