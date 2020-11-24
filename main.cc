@@ -10,7 +10,9 @@
 
 static bool s_verbose = false;
 namespace fs = std::filesystem;
-static const fs::perms execPermissions = fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec;
+
+static const fs::perms execPermissions =
+    fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec;
 
 inline std::string trim(std::string string)
 {
