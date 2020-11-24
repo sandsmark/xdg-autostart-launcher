@@ -10,7 +10,8 @@
 #include <sys/types.h>
 
 static bool s_verbose = false;
-static const std::filesystem::perms execPermissions = std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec | std::filesystem::perms::others_exec;
+namespace fs = std::filesystem;
+static const fs::perms execPermissions = fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec;
 
 inline std::string trim(std::string string)
 {
@@ -80,10 +81,10 @@ static std::vector<std::string> globalConfigPaths()
         std::istringstream stream(paths);
         std::string testPath;
         while (std::getline(stream, testPath, ':')) {
-            if (!std::filesystem::exists(testPath)) {
+            if (!fs::exists(testPath)) {
                 continue;
             }
-            if (!std::filesystem::is_directory(testPath)) {
+            if (!fs::is_directory(testPath)) {
                 continue;
             }
             ret.push_back(testPath);
@@ -128,7 +129,7 @@ static std::string localConfigPath()
     if (!ret.empty()) {
         ret = resolvePath(ret.c_str());
 
-        if (std::filesystem::exists(ret)) {
+        if (fs::exists(ret)) {
             return ret;
         } else {
             ret = "";
@@ -145,10 +146,10 @@ static std::string localConfigPath()
         std::istringstream stream(ret);
         std::string testPath;
         while (std::getline(stream, testPath, ':')) {
-            if (!std::filesystem::exists(testPath)) {
+            if (!fs::exists(testPath)) {
                 continue;
             }
-            if (!std::filesystem::is_directory(testPath)) {
+            if (!fs::is_directory(testPath)) {
                 continue;
             }
 
@@ -157,7 +158,7 @@ static std::string localConfigPath()
         }
     }
 
-    if (ret.empty() || !std::filesystem::exists(ret)) {
+    if (ret.empty() || !fs::exists(ret)) {
         ret = "~/.config";
     }
 
@@ -168,7 +169,7 @@ struct Parser {
     std::unordered_set<std::string> toLaunch;
     std::unordered_set<std::string> disabled;
 
-    void parseFile(const std::filesystem::path &path)
+    void parseFile(const fs::path &path)
     {
         std::ifstream file(path);
         if (!file.good()) {
@@ -252,9 +253,9 @@ struct Parser {
         }
     }
 
-    void handleDir(const std::filesystem::path &dir)
+    void handleDir(const fs::path &dir)
     {
-        for (const std::filesystem::path &file : std::filesystem::directory_iterator(dir)) {
+        for (const fs::path &file : fs::directory_iterator(dir)) {
             parseFile(file);
         }
     }
@@ -266,17 +267,17 @@ struct Parser {
                 std::cout << " - Skipping disabled " << exec << std::endl;
                 continue;
             }
-            if (std::filesystem::path(executable).has_parent_path() && !std::filesystem::exists(executable)) {
+            if (fs::path(executable).has_parent_path() && !fs::exists(executable)) {
                 std::cerr << " ! " << executable << " does not exist, ignoring" << std::endl;
                 continue;
             }
-            if (std::filesystem::exists(executable)) {
-                if (!std::filesystem::is_regular_file(executable) &&
-                    !std::filesystem::is_symlink(executable)) {
+            if (fs::exists(executable)) {
+                if (!fs::is_regular_file(executable) &&
+                    !fs::is_symlink(executable)) {
                     std::cerr << " ! " << executable << " not a file" << std::endl;
                 }
-                std::filesystem::perms permissions = std::filesystem::status(executable).permissions();
-                if ((permissions & execPermissions) == std::filesystem::perms::none) {
+                fs::perms permissions = fs::status(executable).permissions();
+                if ((permissions & execPermissions) == fs::perms::none) {
                     std::cerr << " ! " << executable << " is not executable" << std::endl;
                 }
 
@@ -331,8 +332,8 @@ int main(int argc, char *argv[])
     bool globalFailed = false, userFailed = false;
     if (global) {
         for (const std::string &directory : globalConfigPaths()) {
-            std::filesystem::path path(directory + "/autostart/");
-            if (std::filesystem::exists(path)) {
+            fs::path path(directory + "/autostart/");
+            if (fs::exists(path)) {
                 parser.handleDir(path);
                 globalFailed = false;
             }
@@ -352,9 +353,9 @@ int main(int argc, char *argv[])
     }
 
     if (user) {
-        std::filesystem::path path(localConfigPath() + "/autostart/");
+        fs::path path(localConfigPath() + "/autostart/");
 
-        if (std::filesystem::exists(path)) {
+        if (fs::exists(path)) {
             parser.handleDir(path);
         } else {
             std::cerr << " ! User directory " << path << " does not exist" << std::endl;
