@@ -4,5 +4,5 @@ project(xdg-autostart-launcher)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(xdg-autostart-launcher main.cc)
-target_link_libraries(xdg-autostart-launcher pugixml)
+install(TARGETS xdg-autostart-launcher DESTINATION bin)
 
