@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 static bool s_verbose = false;
+static bool s_dryRun = false;
 namespace fs = std::filesystem;
 
 static const fs::perms execPermissions =
@@ -49,6 +50,10 @@ inline std::vector<std::string> stringSplit(const std::string &string, const cha
 static void launch(const char *command)
 {
     std::cout << " -> Launching " << command << std::endl;
+
+    if (s_dryRun) {
+        return;
+    }
 
     const int pid = fork();
     switch(pid) {
@@ -291,7 +296,7 @@ struct Parser {
 
 void print_usage(const char *executable)
 {
-    std::cout << "Usage:\n\t" << executable << " (--system|--user|--both) [--verbose]" << std::endl;
+    std::cout << "Usage:\n\t" << executable << " (--system|--user|--both) [--verbose] [--dry-run]" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -313,6 +318,9 @@ int main(int argc, char *argv[])
             user = true;
             global = true;
             break;
+        case 'd':
+            s_dryRun = true;
+            break;
 
         default:
             std::cerr << " ! Invalid option " << argv[1] << std::endl;
@@ -323,9 +331,31 @@ int main(int argc, char *argv[])
         print_usage(argv[0]);
     }
 
-    // lol don't care
-    if (argc > 2) {
-        s_verbose = true;
+    for (int i=2; i<argc; i++) {
+        if (strlen(argv[i]) < 3) {
+            print_usage(argv[0]);
+            return 1;
+        }
+        switch(argv[i][2]) {
+            case 'v':
+                s_verbose = true;
+                break;
+            case 'd':
+                s_dryRun = true;
+                break;
+            default:
+                std::cerr << " ! Invalid option " << argv[i] << std::endl;
+                print_usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (s_verbose) {
+        puts("Verbose mode");
+
+        if (s_dryRun) {
+            puts("Dry run");
+        }
     }
 
     Parser parser;
