@@ -217,8 +217,12 @@ struct Parser {
             const std::string name = trim(line.substr(0, nameEnd));
             const std::string value = trim(line.substr(nameEnd + 1));
 
-            if (name == "" || value == "") {
+            if (name == "") {
                 std::cerr << " ! Invalid line '" << line << "' in " << path << std::endl;
+                continue;
+            }
+            if (value == "") {
+                if (s_verbose) std::cerr << " ! Invalid line (empty value) '" << line << "' in " << path << std::endl;
                 continue;
             }
 
