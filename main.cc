@@ -57,12 +57,16 @@ static void launch(const char *command)
 
     const int pid = fork();
     switch(pid) {
-    case 0:
+    case 0: {
         if (s_verbose) std::cout << "Child executing " << command << std::endl;
 
-        std::system(command);
+        const int ret = std::system(command);
+        if (ret != 0 && s_verbose) {
+            perror("Launching failed");
+        }
         exit(0);
         break;
+    }
     case -1:
         std::cerr << " ! Error forking: " << strerror(errno) << std::endl;
         return;
