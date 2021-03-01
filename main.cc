@@ -49,7 +49,7 @@ inline std::vector<std::string> stringSplit(const std::string &string, const cha
 
 static void launch(const char *command)
 {
-    std::cout << " -> Launching " << command << std::endl;
+    std::cout << " -> Launching '" << command << "'" << std::endl;
 
     if (s_dryRun) {
         return;
